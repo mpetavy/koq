@@ -113,7 +113,7 @@ func run() error {
 		title = sb.String()
 
 		index++
-		filename := common.CleanPath(filepath.Join(*output, title, title+" - "+fmt.Sprintf("%02d", index+1)+"."+ext))
+		filename := common.CleanPath(filepath.Join(*output, title, title+" - "+fmt.Sprintf("%02d", index)+"."+ext))
 
 		b, _ = common.FileExists(filename)
 
@@ -128,7 +128,7 @@ func run() error {
 			return err
 		}
 
-		fmt.Printf("Start: %v\n",time.Now().Format(common.DateTimeMask))
+		fmt.Printf("Start: %v\n", time.Now().Format(common.DateTimeMask))
 
 		cmd = exec.Command(*handbrake,
 			"--title", indexElem.Text(),
@@ -158,7 +158,7 @@ func run() error {
 			return err
 		}
 
-		fmt.Printf("End: %v\n",time.Now().Format(common.DateTimeMask))
+		fmt.Printf("End: %v\n", time.Now().Format(common.DateTimeMask))
 
 		fmt.Printf("Time needed: %v\n\n", time.Since(start))
 	}
