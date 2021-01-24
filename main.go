@@ -64,31 +64,29 @@ func run() error {
 		return err
 	}
 
-	root := doc.SelectElement("lsdvd")
+	rootElem := doc.SelectElement("lsdvd")
 
-	titleElem := root.FindElement("//lsdvd/title")
+	titleElem := rootElem.FindElement("//lsdvd/title")
 	if titleElem == nil {
 		return fmt.Errorf("cannot find title element")
 	}
 
-	fmt.Printf("Title: %s\n", titleElem.Text())
-
 	index := 0
-	for _, trackElem := range root.SelectElements("track") {
-		trackIndex := trackElem.FindElement("ix")
-		trackLength := trackElem.FindElement("length")
+	for _, trackElem := range rootElem.SelectElements("track") {
+		indexElem := trackElem.FindElement("ix")
+		lengthElem := trackElem.FindElement("length")
 
-		secs, err := strconv.ParseFloat(trackLength.Text(), 64)
+		secs, err := strconv.ParseFloat(lengthElem.Text(), 64)
 		if common.Error(err) {
 			return err
 		}
 
 		secsDuration := time.Second * time.Duration(secs)
 
-		fmt.Printf("Track %s: %v\n", trackIndex.Text(), secsDuration)
+		fmt.Printf("Track %s: %v\n", indexElem.Text(), secsDuration)
 
 		if secsDuration < *minLength {
-			fmt.Printf("too short track -> skip!\n\n")
+			fmt.Printf("track too short  -> skip!\n\n")
 
 			continue
 		}
@@ -114,6 +112,7 @@ func run() error {
 
 		title = sb.String()
 
+		index++
 		filename := common.CleanPath(filepath.Join(*output, title, title+" - "+fmt.Sprintf("%02d", index+1)+"."+ext))
 
 		b, _ = common.FileExists(filename)
@@ -129,9 +128,10 @@ func run() error {
 			return err
 		}
 
-		index++
+		fmt.Printf("Start: %v\n",time.Now().Format(common.DateTimeMask))
 
 		cmd = exec.Command(*handbrake,
+			"--title", indexElem.Text(),
 			"--preset", *preset,
 			"--input", *device,
 			"--output", filename,
@@ -157,6 +157,8 @@ func run() error {
 		if common.Error(err) {
 			return err
 		}
+
+		fmt.Printf("End: %v\n",time.Now().Format(common.DateTimeMask))
 
 		fmt.Printf("Time needed: %v\n\n", time.Since(start))
 	}
