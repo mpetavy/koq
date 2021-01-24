@@ -163,6 +163,12 @@ func run() error {
 		fmt.Printf("Time needed: %v\n\n", time.Since(start))
 	}
 
+	cmd = exec.Command("eject", *device)
+	err = cmd.Run()
+	if common.Error(err) {
+		return err
+	}
+
 	return nil
 }
 
