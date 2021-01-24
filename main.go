@@ -25,19 +25,8 @@ var (
 	output       *string
 )
 
-func printPath() {
-	p, err := os.Getwd()
-	if err != nil {
-		panic(err)
-	}
-
-	fmt.Printf("curent path %s\n", p)
-}
-
 func init() {
-	printPath()
 	common.Init(false, "1.0.0", "", "2021", "Rescues my KOQ discs", "mpetavy", fmt.Sprintf("https://github.com/mpetavy/%s", common.Title()), common.APACHE, nil, nil, run, 0)
-	printPath()
 
 	minLength = flag.Duration("min", time.Minute*10, "minimum duration to consider as valid track")
 	preset = flag.String("p", "Fast 720p30", "device to read the DVD content")
@@ -51,7 +40,6 @@ func init() {
 }
 
 func run() error {
-	printPath()
 	b, _ := common.FileExists(*output)
 	if !b {
 		return &common.ErrFileNotFound{
@@ -97,14 +85,13 @@ func run() error {
 
 		secsDuration := time.Second * time.Duration(secs)
 
-		fmt.Printf("Track %s: %v", trackIndex.Text(), secsDuration)
+		fmt.Printf("Track %s: %v\n", trackIndex.Text(), secsDuration)
 
 		if secsDuration < *minLength {
-			fmt.Printf(" skip!\n")
+			fmt.Printf("too short track -> skip!\n\n")
+
 			continue
 		}
-
-		fmt.Printf("\n")
 
 		ext := *format
 		p := strings.LastIndex(*format, "_")
@@ -127,13 +114,22 @@ func run() error {
 
 		title = sb.String()
 
-		index++
-		filename := common.CleanPath(filepath.Join(*output, title, title+" - "+fmt.Sprintf("%02d", index)+"."+ext))
+		filename := common.CleanPath(filepath.Join(*output, title, title+" - "+fmt.Sprintf("%02d", index+1)+"."+ext))
 
-		err = os.MkdirAll(filepath.Dir(filename),common.DefaultDirMode)
+		b, _ = common.FileExists(filename)
+
+		if b {
+			fmt.Printf("target file %s already exists -> skip!\n\n", filename)
+
+			continue
+		}
+
+		err = os.MkdirAll(filepath.Dir(filename), common.DefaultDirMode)
 		if common.Error(err) {
 			return err
 		}
+
+		index++
 
 		cmd = exec.Command(*handbrake,
 			"--preset", *preset,
@@ -153,12 +149,16 @@ func run() error {
 			"--subtitle-burned",
 			"--native-language="+*language)
 
-		fmt.Printf("%s %s", time.Now().Format(common.DateTimeMask), common.CmdToString(cmd))
+		fmt.Println(common.CmdToString(cmd))
+
+		start := time.Now()
 
 		err = cmd.Run()
 		if common.Error(err) {
 			return err
 		}
+
+		fmt.Printf("Time needed: %v\n\n", time.Since(start))
 	}
 
 	return nil
