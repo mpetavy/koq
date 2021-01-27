@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"github.com/beevik/etree"
 	"github.com/mpetavy/common"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,6 +14,8 @@ import (
 	"strings"
 	"time"
 )
+
+// windows: koq -h "c:\Program Files\HandBrake\HandBrakeCLI.exe" -o "z:\Media\Videos\King of Queens" -d g:
 
 var (
 	minLength    *time.Duration
@@ -23,10 +27,15 @@ var (
 	audioEncoder *string
 	language     *string
 	output       *string
+	title        *string
+)
+
+const (
+	windowsEjectScript = "Set oWMP = CreateObject(\"WMPlayer.OCX.7\" )\nSet colCDROMs = oWMP.cdromCollection\n\nif colCDROMs.Count >= 1 then\n        For i = 0 to colCDROMs.Count - 1\n\t\t\t\tif lcase(colCDROMs.Item(i).driveSpecifier) = lcase(wscript.Arguments.Item(0)) then\n\t\t\t\t\tcolCDROMs.Item(i).Eject\n\t\t\t\tend if\n        Next\nEnd If\n"
 )
 
 func init() {
-	common.Init(false, "1.0.0", "", "2021", "Rescues my KOQ discs", "mpetavy", fmt.Sprintf("https://github.com/mpetavy/%s", common.Title()), common.APACHE, nil, nil, run, 0)
+	common.Init(false, "1.0.0", "", "2021", "Rescues my KoQ discs (and others...)", "mpetavy", fmt.Sprintf("https://github.com/mpetavy/%s", common.Title()), common.APACHE, nil, nil, run, 0)
 
 	minLength = flag.Duration("min", time.Minute*10, "minimum duration to consider as valid track")
 	preset = flag.String("p", "Fast 720p30", "device to read the DVD content")
@@ -37,6 +46,84 @@ func init() {
 	audioEncoder = flag.String("a", "copy:ac3", "Handbrake audio encoder")
 	language = flag.String("l", "de", "Handbrake language")
 	output = flag.String("o", ".", "Output directory")
+	title = flag.String("t", "", "Title to use")
+}
+
+func readMetadata() (*etree.Document,error) {
+	ba := []byte{}
+
+	if common.IsWindowsOS() {
+		var err error
+
+		cmd := exec.Command("cmd.exe","/k","dir " + *device)
+		ba, err = cmd.Output()
+		if common.Error(err) {
+			return nil,err
+		}
+
+		scanner := bufio.NewScanner(strings.NewReader(string(ba)))
+		if scanner.Scan() {
+			line := scanner.Text()
+
+			p := strings.LastIndex(line," ")
+			if p != -1 {
+				*title = line[p+1:]
+			}
+		}
+
+		cmd = exec.Command("wsl","--","mkdir","-p","/tmp/mnt;sudo","mount","-t","drvfs","g:","/tmp/mnt;","lsdvd","-Ox","-a","-v","/tmp/mnt;","sudo","umount","/tmp/mnt;","rm","-rf","/tmp/mnt")
+		ba, err = cmd.Output()
+		if common.Error(err) {
+			return nil,err
+		}
+	} else {
+		var err error
+
+		cmd := exec.Command("lsdvd", "-Ox", "-a", "-v")
+		ba, err = cmd.Output()
+		if common.Error(err) {
+			return nil,err
+		}
+	}
+
+	doc := etree.NewDocument()
+	err := doc.ReadFromBytes(ba)
+
+	return doc,err
+}
+
+func eject() error {
+	if common.IsWindowsOS() {
+		f,err := common.CreateTempFile()
+		if common.Error(err) {
+			return err
+		}
+
+		filename := f.Name() + ".vbs"
+
+		err = ioutil.WriteFile(filename,[]byte(windowsEjectScript),common.DefaultFileMode)
+		if common.Error(err) {
+			return err
+		}
+
+		defer func() {
+			common.DebugError(common.FileDelete(filename))
+		}()
+
+		cmd := exec.Command("cscript",filename,*device)
+		err = cmd.Run()
+		if common.Error(err) {
+			return err
+		}
+	} else {
+		cmd := exec.Command("eject", *device)
+		err := cmd.Run()
+		if common.Error(err) {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func run() error {
@@ -52,26 +139,31 @@ func run() error {
 		return fmt.Errorf("%s is not a directory", *output)
 	}
 
-	cmd := exec.Command("lsdvd", "-Ox", "-a", "-v")
-	ba, err := cmd.Output()
-	if common.Error(err) {
-		return err
-	}
-
-	doc := etree.NewDocument()
-	err = doc.ReadFromBytes(ba)
+	doc,err := readMetadata()
 	if common.Error(err) {
 		return err
 	}
 
 	rootElem := doc.SelectElement("lsdvd")
 
-	titleElem := rootElem.FindElement("//lsdvd/title")
-	if titleElem == nil {
-		return fmt.Errorf("cannot find title element")
+	if *title == "" {
+		titleElem := rootElem.FindElement("//lsdvd/title")
+		if titleElem == nil {
+			return fmt.Errorf("cannot find title element")
+		}
+		if titleElem.Text() == "unknown" {
+			return fmt.Errorf("found DVD title is 'unknown', please provide title")
+		}
+
+		*title = titleElem.Text()
 	}
 
+	allStart := time.Now()
 	index := 0
+
+	common.Info("Title: %s",*title)
+	common.Info("")
+
 	for _, trackElem := range rootElem.SelectElements("track") {
 		indexElem := trackElem.FindElement("ix")
 		lengthElem := trackElem.FindElement("length")
@@ -83,10 +175,10 @@ func run() error {
 
 		secsDuration := time.Second * time.Duration(secs)
 
-		fmt.Printf("Track %s: %v\n", indexElem.Text(), secsDuration)
+		common.Info("Track %s: %v", indexElem.Text(), secsDuration)
 
 		if secsDuration < *minLength {
-			fmt.Printf("track too short  -> skip!\n\n")
+			common.Info("track too short  -> skip!")
 
 			continue
 		}
@@ -97,8 +189,7 @@ func run() error {
 			ext = ext[p+1:]
 		}
 
-		title := titleElem.Text()
-		ss := strings.Split(title, "_")
+		ss := strings.Split(*title, "_")
 
 		var sb strings.Builder
 
@@ -110,15 +201,15 @@ func run() error {
 			sb.WriteString(common.Capitalize(strings.ToLower(s)))
 		}
 
-		title = sb.String()
+		*title = sb.String()
 
 		index++
-		filename := common.CleanPath(filepath.Join(*output, title, title+" - "+fmt.Sprintf("%02d", index)+"."+ext))
+		filename := common.CleanPath(filepath.Join(*output, *title, *title+" - "+fmt.Sprintf("%02d", index)+"."+ext))
 
 		b, _ = common.FileExists(filename)
 
 		if b {
-			fmt.Printf("target file %s already exists -> skip!\n\n", filename)
+			common.Info("target file %s already exists -> skip!", filename)
 
 			continue
 		}
@@ -128,9 +219,9 @@ func run() error {
 			return err
 		}
 
-		fmt.Printf("Start: %v\n", time.Now().Format(common.DateTimeMask))
+		common.Info("Start: %v", time.Now().Format(common.DateTimeMask))
 
-		cmd = exec.Command(*handbrake,
+		cmd := exec.Command(*handbrake,
 			"--title", indexElem.Text(),
 			"--preset", *preset,
 			"--input", *device,
@@ -149,7 +240,7 @@ func run() error {
 			"--subtitle-burned",
 			"--native-language="+*language)
 
-		fmt.Println(common.CmdToString(cmd))
+		common.Info("Execute: %s",common.CmdToString(cmd))
 
 		start := time.Now()
 
@@ -158,13 +249,15 @@ func run() error {
 			return err
 		}
 
-		fmt.Printf("End: %v\n", time.Now().Format(common.DateTimeMask))
+		common.Info("End: %v", time.Now().Format(common.DateTimeMask))
 
-		fmt.Printf("Time needed: %v\n\n", time.Since(start))
+		common.Info("Time needed: %v", time.Since(start))
+		common.Info("")
 	}
 
-	cmd = exec.Command("eject", *device)
-	err = cmd.Run()
+	common.Info("Total time needed: %v\n\n", time.Since(allStart))
+
+	err = eject()
 	if common.Error(err) {
 		return err
 	}
