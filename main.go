@@ -21,7 +21,7 @@ var (
 	minLength    *time.Duration
 	preset       *string
 	handbrake    *string
-	device       *string
+	input        *string
 	format       *string
 	videoEncoder *string
 	audioEncoder *string
@@ -40,7 +40,7 @@ func init() {
 	minLength = flag.Duration("min", time.Minute*10, "minimum duration to consider as valid track")
 	preset = flag.String("p", "Fast 720p30", "device to read the DVD content")
 	handbrake = flag.String("h", "HandBrakeCLI", "path to Handbrake CLI executable")
-	device = flag.String("d", "/dev/dvd", "device to read the DVD content")
+	input = flag.String("i", "/dev/dvd", "Input device to read the DVD content")
 	format = flag.String("f", "av_mp4", "Handbrake video format")
 	videoEncoder = flag.String("v", "nvenc_h264", "Handbrake video encoder")
 	audioEncoder = flag.String("a", "copy:ac3", "Handbrake audio encoder")
@@ -49,59 +49,104 @@ func init() {
 	title = flag.String("t", "", "Title to use")
 }
 
-func readMetadata() (*etree.Document,error) {
+func readMetadata() (string, *etree.Document, error) {
 	ba := []byte{}
+	dvdTitle := *title
 
 	if common.IsWindowsOS() {
 		var err error
 
-		cmd := exec.Command("cmd.exe","/k","dir " + *device)
+		cmd := exec.Command("cmd.exe", "/k", "dir "+*input)
 		ba, err = cmd.Output()
 		if common.Error(err) {
-			return nil,err
+			return dvdTitle, nil, err
 		}
 
-		scanner := bufio.NewScanner(strings.NewReader(string(ba)))
-		if scanner.Scan() {
-			line := scanner.Text()
+		if dvdTitle == "" {
+			scanner := bufio.NewScanner(strings.NewReader(string(ba)))
+			if scanner.Scan() {
+				line := scanner.Text()
 
-			p := strings.LastIndex(line," ")
-			if p != -1 {
-				*title = line[p+1:]
+				p := strings.LastIndex(line, " ")
+				if p != -1 {
+					dvdTitle = line[p+1:]
+				}
 			}
 		}
 
-		cmd = exec.Command("wsl","--","mkdir","-p","/tmp/mnt;sudo","mount","-t","drvfs","g:","/tmp/mnt;","lsdvd","-Ox","-a","-v","/tmp/mnt;","sudo","umount","/tmp/mnt;","rm","-rf","/tmp/mnt")
+		cmd = exec.Command("wsl", "--", "mkdir", "-p", "/tmp/mnt;sudo", "mount", "-t", "drvfs", "g:", "/tmp/mnt;", "lsdvd", "-Ox", "-a", "-v", "/tmp/mnt;", "sudo", "umount", "/tmp/mnt;", "rm", "-rf", "/tmp/mnt")
+
+		common.Info("Execute: %s", common.CmdToString(cmd))
+
 		ba, err = cmd.Output()
 		if common.Error(err) {
-			return nil,err
+			return dvdTitle, nil, err
 		}
 	} else {
 		var err error
 
 		cmd := exec.Command("lsdvd", "-Ox", "-a", "-v")
+
+		common.Info("Execute: %s", common.CmdToString(cmd))
+
 		ba, err = cmd.Output()
 		if common.Error(err) {
-			return nil,err
+			return dvdTitle, nil, err
 		}
 	}
 
 	doc := etree.NewDocument()
-	err := doc.ReadFromBytes(ba)
+	doc.ReadSettings.Permissive = true
 
-	return doc,err
+	err := doc.ReadFromBytes(ba)
+	if common.Error(err) {
+		return dvdTitle, nil, err
+	}
+
+	rootElem := doc.SelectElement("lsdvd")
+	if rootElem == nil {
+		return dvdTitle, nil, fmt.Errorf("cannot find root element 'lsdvd'")
+	}
+
+	if dvdTitle == "" {
+		titleElem := rootElem.FindElement("//lsdvd/title")
+		if titleElem == nil {
+			return dvdTitle, nil, fmt.Errorf("cannot find title element")
+		}
+		if titleElem.Text() == "unknown" {
+			return dvdTitle, nil, fmt.Errorf("found DVD title is 'unknown', please provide title")
+		}
+
+		dvdTitle = titleElem.Text()
+	}
+
+	ss := strings.Split(dvdTitle, "_")
+
+	var sb strings.Builder
+
+	for _, s := range ss {
+		if sb.Len() > 0 {
+			sb.WriteString(" ")
+		}
+
+		sb.WriteString(common.Capitalize(strings.ToLower(s)))
+	}
+
+	dvdTitle = sb.String()
+
+	return dvdTitle, doc, nil
 }
 
 func eject() error {
 	if common.IsWindowsOS() {
-		f,err := common.CreateTempFile()
+		f, err := common.CreateTempFile()
 		if common.Error(err) {
 			return err
 		}
 
 		filename := f.Name() + ".vbs"
 
-		err = ioutil.WriteFile(filename,[]byte(windowsEjectScript),common.DefaultFileMode)
+		err = ioutil.WriteFile(filename, []byte(windowsEjectScript), common.DefaultFileMode)
 		if common.Error(err) {
 			return err
 		}
@@ -110,13 +155,13 @@ func eject() error {
 			common.DebugError(common.FileDelete(filename))
 		}()
 
-		cmd := exec.Command("cscript",filename,*device)
+		cmd := exec.Command("cscript", filename, *input)
 		err = cmd.Run()
 		if common.Error(err) {
 			return err
 		}
 	} else {
-		cmd := exec.Command("eject", *device)
+		cmd := exec.Command("eject", *input)
 		err := cmd.Run()
 		if common.Error(err) {
 			return err
@@ -127,7 +172,7 @@ func eject() error {
 }
 
 func run() error {
-	b, _ := common.FileExists(*output)
+	b := common.FileExists(*output)
 	if !b {
 		return &common.ErrFileNotFound{
 			FileName: *output,
@@ -139,29 +184,17 @@ func run() error {
 		return fmt.Errorf("%s is not a directory", *output)
 	}
 
-	doc,err := readMetadata()
+	dvdTitle, doc, err := readMetadata()
 	if common.Error(err) {
 		return err
 	}
 
 	rootElem := doc.SelectElement("lsdvd")
 
-	if *title == "" {
-		titleElem := rootElem.FindElement("//lsdvd/title")
-		if titleElem == nil {
-			return fmt.Errorf("cannot find title element")
-		}
-		if titleElem.Text() == "unknown" {
-			return fmt.Errorf("found DVD title is 'unknown', please provide title")
-		}
-
-		*title = titleElem.Text()
-	}
-
 	allStart := time.Now()
 	index := 0
 
-	common.Info("Title: %s",*title)
+	common.Info("Found title: %s", dvdTitle)
 	common.Info("")
 
 	for _, trackElem := range rootElem.SelectElements("track") {
@@ -189,24 +222,10 @@ func run() error {
 			ext = ext[p+1:]
 		}
 
-		ss := strings.Split(*title, "_")
-
-		var sb strings.Builder
-
-		for _, s := range ss {
-			if sb.Len() > 0 {
-				sb.WriteString(" ")
-			}
-
-			sb.WriteString(common.Capitalize(strings.ToLower(s)))
-		}
-
-		*title = sb.String()
-
 		index++
-		filename := common.CleanPath(filepath.Join(*output, *title, *title+" - "+fmt.Sprintf("%02d", index)+"."+ext))
+		filename := common.CleanPath(filepath.Join(*output, dvdTitle, dvdTitle+" - "+fmt.Sprintf("%02d", index)+"."+ext))
 
-		b, _ = common.FileExists(filename)
+		b = common.FileExists(filename)
 
 		if b {
 			common.Info("target file %s already exists -> skip!", filename)
@@ -224,7 +243,7 @@ func run() error {
 		cmd := exec.Command(*handbrake,
 			"--title", indexElem.Text(),
 			"--preset", *preset,
-			"--input", *device,
+			"--input", *input,
 			"--output", filename,
 			"--format", *format,
 			"--optimize",
@@ -240,7 +259,7 @@ func run() error {
 			"--subtitle-burned",
 			"--native-language="+*language)
 
-		common.Info("Execute: %s",common.CmdToString(cmd))
+		common.Info("Execute: %s", common.CmdToString(cmd))
 
 		start := time.Now()
 
@@ -268,5 +287,5 @@ func run() error {
 func main() {
 	defer common.Done()
 
-	common.Run(nil)
+	common.Run([]string{"i"})
 }
