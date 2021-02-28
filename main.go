@@ -179,8 +179,7 @@ func run() error {
 		}
 	}
 
-	b, _ = common.IsDirectory(*output)
-	if !b {
+	if !common.IsDirectory(*output) {
 		return fmt.Errorf("%s is not a directory", *output)
 	}
 
