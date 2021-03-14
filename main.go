@@ -35,7 +35,7 @@ const (
 )
 
 func init() {
-	common.Init(false, "1.0.0", "", "2021", "Rescues my KoQ discs (and others...)", "mpetavy", fmt.Sprintf("https://github.com/mpetavy/%s", common.Title()), common.APACHE, nil, nil, run, 0)
+	common.Init(false, "1.0.0", "", "2021", "Rescues my KoQ discs (and others...)", "mpetavy", fmt.Sprintf("https://github.com/mpetavy/%s", common.Title()), common.APACHE, nil, nil, nil, run, 0)
 
 	minLength = flag.Duration("min", time.Minute*10, "minimum duration to consider as valid track")
 	preset = flag.String("p", "Fast 720p30", "device to read the DVD content")
