@@ -189,8 +189,17 @@ func run() error {
 	}
 
 	rootElem := doc.SelectElement("lsdvd")
-
 	allStart := time.Now()
+
+	if *title == "" {
+		titleElem := rootElem.FindElement("//lsdvd/title")
+		if titleElem == nil {
+			return fmt.Errorf("cannot find title element")
+		}
+
+		*title = titleElem.Text()
+	}
+
 	index := 0
 
 	common.Info("Found title: %s", dvdTitle)
@@ -222,7 +231,21 @@ func run() error {
 		}
 
 		index++
+
 		filename := common.CleanPath(filepath.Join(*output, dvdTitle, dvdTitle+" - "+fmt.Sprintf("%02d", index)+"."+ext))
+		ss := strings.Split(*title, "_")
+
+		var sb strings.Builder
+
+		for _, s := range ss {
+			if sb.Len() > 0 {
+				sb.WriteString(" ")
+			}
+
+			sb.WriteString(common.Capitalize(strings.ToLower(s)))
+		}
+
+		*title = sb.String()
 
 		b = common.FileExists(filename)
 
