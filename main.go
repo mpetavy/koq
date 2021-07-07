@@ -39,7 +39,7 @@ func init() {
 
 	minLength = flag.Duration("min", time.Minute*10, "minimum duration to consider as valid track")
 	preset = flag.String("p", "Fast 720p30", "device to read the DVD content")
-	handbrake = flag.String("h", "HandBrakeCLI", "path to Handbrake CLI executable")
+	handbrake = flag.String("b", "HandBrakeCLI", "path to Handbrake CLI executable")
 	input = flag.String("i", "/dev/dvd", "Input device to read the DVD content")
 	format = flag.String("f", "av_mp4", "Handbrake video format")
 	videoEncoder = flag.String("v", "nvenc_h264", "Handbrake video encoder")
