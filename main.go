@@ -40,12 +40,34 @@ func init() {
 	minLength = flag.Duration("min", time.Minute*10, "minimum duration to consider as valid track")
 	preset = flag.String("p", "Fast 720p30", "device to read the DVD content")
 	handbrake = flag.String("b", "HandBrakeCLI", "path to Handbrake CLI executable")
-	input = flag.String("i", "/dev/dvd", "Input device to read the DVD content")
+
+	var drive string
+
+	drives := []string{"/dev/dvd", "/dev/sr0", "dev(cdrom"}
+
+	for _, d := range drives {
+		if common.FileExists(d) {
+			drive = d
+			break
+		}
+	}
+	input = flag.String("i", drive, "Input device to read the DVD content")
 	format = flag.String("f", "av_mp4", "Handbrake video format")
 	videoEncoder = flag.String("v", "nvenc_h264", "Handbrake video encoder")
 	audioEncoder = flag.String("a", "copy:ac3", "Handbrake audio encoder")
 	language = flag.String("l", "de", "Handbrake language")
-	output = flag.String("o", ".", "Output directory")
+
+	ud, _ := os.UserHomeDir()
+	ud = fmt.Sprintf("%s/Videos", ud)
+
+	var o string
+	if common.IsWindowsOS() || ud == "" || !common.FileExists(ud) {
+		o = "."
+	} else {
+		o = ud
+	}
+	output = flag.String("o", o, "Output directory")
+
 	title = flag.String("t", "", "Title to use")
 }
 
@@ -92,7 +114,7 @@ func readMetadata() (string, *etree.Document, error) {
 	} else {
 		var err error
 
-		cmd := exec.Command("lsdvd", "-Ox", "-a", "-v")
+		cmd := exec.Command("lsdvd", "-Ox", "-a", "-v", *input)
 
 		common.Info("Execute: %s", common.CmdToString(cmd))
 
