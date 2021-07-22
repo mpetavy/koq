@@ -100,14 +100,7 @@ func readMetadata() (string, *etree.Document, error) {
 
 		common.Info("Execute: %s", common.CmdToString(cmd))
 
-		err = common.WatchdogCmd(cmd, time.Second*3)
-		if common.Error(err) {
-			return "", nil, err
-		}
-
-		common.Info("Execute: %s", common.CmdToString(cmd))
-
-		ba, err = cmd.Output()
+		ba, err = common.WatchdogCmd(cmd, time.Second*3)
 		if common.Error(err) {
 			return dvdTitle, nil, err
 		}
