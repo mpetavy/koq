@@ -102,7 +102,7 @@ func readMetadata() (string, *etree.Document, error) {
 
 		ba, err = common.NewWatchdogCmd(cmd, time.Second*3)
 		if common.Error(err) {
-			return dvdTitle, nil, err
+			return "", nil, err
 		}
 	} else {
 		var err error
@@ -269,12 +269,7 @@ func run() error {
 	allStart := time.Now()
 
 	if *title == "" {
-		titleElem := rootElem.FindElement("//lsdvd/title")
-		if titleElem == nil {
-			return fmt.Errorf("cannot find title element")
-		}
-
-		*title = titleElem.Text()
+		*title = dvdTitle
 	}
 
 	index := 0
@@ -285,6 +280,7 @@ func run() error {
 	for _, trackElem := range rootElem.SelectElements("track") {
 		indexElem := trackElem.FindElement("ix")
 		lengthElem := trackElem.FindElement("length")
+		widthElem := trackElem.FindElement("width")
 
 		secs, err := strconv.ParseFloat(lengthElem.Text(), 64)
 		if common.Error(err) {
@@ -305,6 +301,17 @@ func run() error {
 		p := strings.LastIndex(*format, "_")
 		if p != -1 {
 			ext = ext[p+1:]
+		}
+
+		width, err := strconv.Atoi(widthElem.Text())
+		if common.Error(err) {
+			return err
+		}
+
+		if width <= 720 {
+			*preset = "Fast 720p30"
+		} else {
+			*preset = "Fast 1080p30"
 		}
 
 		index++
@@ -337,7 +344,10 @@ func run() error {
 			return err
 		}
 
-		encode(indexElem.Text(), filename)
+		err = encode(indexElem.Text(), filename)
+		if common.Error(err) {
+			return err
+		}
 	}
 
 	common.Info("Total time needed: %v\n\n", time.Since(allStart))
