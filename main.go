@@ -38,7 +38,7 @@ func init() {
 	common.Init(false, "1.0.0", "", "", "2021", "Rescues my KoQ discs (and others...)", "mpetavy", fmt.Sprintf("https://github.com/mpetavy/%s", common.Title()), common.APACHE, nil, nil, nil, run, 0)
 
 	minLength = flag.Duration("min", time.Minute*10, "minimum duration to consider as valid track")
-	preset = flag.String("p", "Fast 720p30", "device to read the DVD content")
+	preset = flag.String("p", "Fast 1080p30", "device to read the DVD content")
 	handbrake = flag.String("b", "HandBrakeCLI", "path to Handbrake CLI executable")
 
 	var drive string
@@ -193,6 +193,45 @@ func eject() error {
 	return nil
 }
 
+func encode(title string, filename string) error {
+	common.Info("Start: %v", time.Now().Format(common.DateTimeMask))
+
+	cmd := exec.Command(*handbrake,
+		"--title", title,
+		"--preset", *preset,
+		"--input", *input,
+		"--output", filename,
+		"--format", *format,
+		"--optimize",
+		"--keep-display-aspect",
+		"--comb-detect",
+		"--decomb",
+		"--encoder="+*videoEncoder,
+		"--audio-lang-list="+*language,
+		"--aencoder="+*audioEncoder,
+		"--loose-crop",
+		"--subtitle", "scan",
+		"--subtitle-forced",
+		"--subtitle-burned",
+		"--native-language="+*language)
+
+	common.Info("Execute: %s", common.CmdToString(cmd))
+
+	start := time.Now()
+
+	err := cmd.Run()
+	if common.Error(err) {
+		return err
+	}
+
+	common.Info("End: %v", time.Now().Format(common.DateTimeMask))
+
+	common.Info("Time needed: %v", time.Since(start))
+	common.Info("")
+
+	return err
+}
+
 func run() error {
 	b := common.FileExists(*output)
 	if !b {
@@ -203,6 +242,22 @@ func run() error {
 
 	if !common.IsDirectory(*output) {
 		return fmt.Errorf("%s is not a directory", *output)
+	}
+
+	stat, err := os.Stat(*input)
+	if common.Error(err) {
+		return err
+	}
+
+	if stat.Mode().IsRegular() {
+		name := filepath.Base(*input)
+		if strings.Index(name, ".") != -1 {
+			name = name[0:strings.Index(name, ".")]
+		}
+
+		name = name + ".mp4"
+
+		return encode(common.Capitalize(name), filepath.Join(*output, strings.ToLower(name)))
 	}
 
 	dvdTitle, doc, err := readMetadata()
@@ -282,40 +337,7 @@ func run() error {
 			return err
 		}
 
-		common.Info("Start: %v", time.Now().Format(common.DateTimeMask))
-
-		cmd := exec.Command(*handbrake,
-			"--title", indexElem.Text(),
-			"--preset", *preset,
-			"--input", *input,
-			"--output", filename,
-			"--format", *format,
-			"--optimize",
-			"--keep-display-aspect",
-			"--comb-detect",
-			"--decomb",
-			"--encoder="+*videoEncoder,
-			"--audio-lang-list="+*language,
-			"--aencoder="+*audioEncoder,
-			"--loose-crop",
-			"--subtitle", "scan",
-			"--subtitle-forced",
-			"--subtitle-burned",
-			"--native-language="+*language)
-
-		common.Info("Execute: %s", common.CmdToString(cmd))
-
-		start := time.Now()
-
-		err = cmd.Run()
-		if common.Error(err) {
-			return err
-		}
-
-		common.Info("End: %v", time.Now().Format(common.DateTimeMask))
-
-		common.Info("Time needed: %v", time.Since(start))
-		common.Info("")
+		encode(indexElem.Text(), filename)
 	}
 
 	common.Info("Total time needed: %v\n\n", time.Since(allStart))
