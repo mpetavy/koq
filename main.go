@@ -117,10 +117,23 @@ func readMetadata() (string, *etree.Document, error) {
 		}
 	}
 
+	sb := strings.Builder{}
+
+	scanner := bufio.NewScanner(strings.NewReader(string(ba)))
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.Contains(line, "<langcode>") {
+			sb.WriteString(line)
+			sb.WriteString("\n")
+		}
+	}
+
 	doc := etree.NewDocument()
 	doc.ReadSettings.Permissive = true
 
-	err := doc.ReadFromBytes(ba)
+	cleanedXml := sb.String()
+
+	err := doc.ReadFromBytes([]byte(cleanedXml))
 	if common.Error(err) {
 		return dvdTitle, nil, err
 	}
@@ -144,7 +157,7 @@ func readMetadata() (string, *etree.Document, error) {
 
 	ss := strings.Split(dvdTitle, "_")
 
-	var sb strings.Builder
+	sb.Reset()
 
 	for _, s := range ss {
 		if sb.Len() > 0 {
