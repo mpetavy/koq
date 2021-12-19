@@ -27,6 +27,8 @@ var (
 	audioEncoder *string
 	language     *string
 	output       *string
+	startTime    *string
+	stopTime     *string
 	title        *string
 )
 
@@ -55,7 +57,9 @@ func init() {
 	format = flag.String("f", "av_mp4", "Handbrake video format")
 	videoEncoder = flag.String("v", "nvenc_h264", "Handbrake video encoder")
 	audioEncoder = flag.String("a", "copy:ac3", "Handbrake audio encoder")
-	language = flag.String("l", "de", "Handbrake language")
+	language = flag.String("l", "ger,eng", "Handbrake language")
+	startTime = flag.String("start", "", "Handbrake start-at duration in secs")
+	stopTime = flag.String("stop", "", "Handbrake stop-at duration in secs")
 
 	ud, _ := os.UserHomeDir()
 	ud = fmt.Sprintf("%s/Videos", ud)
@@ -209,7 +213,7 @@ func eject() error {
 func encode(title string, filename string) error {
 	common.Info("Start: %v", time.Now().Format(common.DateTimeMask))
 
-	cmd := exec.Command(*handbrake,
+	args := []string{
 		"--title", title,
 		"--preset", *preset,
 		"--input", *input,
@@ -219,14 +223,25 @@ func encode(title string, filename string) error {
 		"--keep-display-aspect",
 		"--comb-detect",
 		"--decomb",
-		"--encoder="+*videoEncoder,
-		"--audio-lang-list="+*language,
-		"--aencoder="+*audioEncoder,
+		"--encoder=" + *videoEncoder,
+		"--audio-lang-list=" + *language,
+		"--aencoder=" + *audioEncoder,
 		"--loose-crop",
 		"--subtitle", "scan",
 		"--subtitle-forced",
 		"--subtitle-burned",
-		"--native-language="+*language)
+		"--native-language=" + *language,
+	}
+
+	if *startTime != "" {
+		args = append(args, "--start-at", "duration:"+*startTime)
+	}
+
+	if *stopTime != "" {
+		args = append(args, "--stop-at", "duration:"+*stopTime)
+	}
+
+	cmd := exec.Command(*handbrake, args...)
 
 	common.Info("Execute: %s", common.CmdToString(cmd))
 
