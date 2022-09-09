@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/beevik/etree"
 	"github.com/mpetavy/common"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -185,7 +184,7 @@ func eject() error {
 
 		filename := f.Name() + ".vbs"
 
-		err = ioutil.WriteFile(filename, []byte(windowsEjectScript), common.DefaultFileMode)
+		err = os.WriteFile(filename, []byte(windowsEjectScript), common.DefaultFileMode)
 		if common.Error(err) {
 			return err
 		}
