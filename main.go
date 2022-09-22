@@ -254,7 +254,6 @@ func encode(title string, filename string) error {
 	common.Info("End: %v", time.Now().Format(common.DateTimeMask))
 
 	common.Info("Time needed: %v", time.Since(start))
-	common.Info("")
 
 	return err
 }
@@ -292,22 +291,26 @@ func run() error {
 		return err
 	}
 
+	common.Info("")
+	common.Info("Metadata title: %s", dvdTitle)
+
 	if *title == "" {
 		*title = dvdTitle
 	}
 
 	*title = strings.ReplaceAll(*title, "_", " ")
 
-	common.Info("Title: %s", *title)
+	common.Info("")
+	common.Info("Used Title: %s", *title)
 
 	rootElem := doc.SelectElement("lsdvd")
 	allStart := time.Now()
 
 	index := 0
 
-	common.Info("")
-
 	for _, trackElem := range rootElem.SelectElements("track") {
+		common.Info("")
+
 		indexElem := trackElem.FindElement("ix")
 		lengthElem := trackElem.FindElement("length")
 		widthElem := trackElem.FindElement("width")
@@ -365,6 +368,7 @@ func run() error {
 		}
 	}
 
+	common.Info("")
 	common.Info("Total time needed: %v\n\n", time.Since(allStart))
 
 	err = eject()
