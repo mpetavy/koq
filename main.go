@@ -292,16 +292,19 @@ func run() error {
 		return err
 	}
 
-	rootElem := doc.SelectElement("lsdvd")
-	allStart := time.Now()
-
 	if *title == "" {
 		*title = dvdTitle
 	}
 
+	*title = strings.ReplaceAll(*title, "_", " ")
+
+	common.Info("Title: %s", *title)
+
+	rootElem := doc.SelectElement("lsdvd")
+	allStart := time.Now()
+
 	index := 0
 
-	common.Info("Found title: %s", dvdTitle)
 	common.Info("")
 
 	for _, trackElem := range rootElem.SelectElements("track") {
@@ -343,24 +346,9 @@ func run() error {
 
 		index++
 
-		filename := common.CleanPath(filepath.Join(*output, dvdTitle, dvdTitle+" - "+fmt.Sprintf("%02d", index)+"."+ext))
-		ss := strings.Split(*title, "_")
+		filename := common.CleanPath(filepath.Join(*output, *title, *title+" - "+fmt.Sprintf("%02d", index)+"."+ext))
 
-		var sb strings.Builder
-
-		for _, s := range ss {
-			if sb.Len() > 0 {
-				sb.WriteString(" ")
-			}
-
-			sb.WriteString(common.Capitalize(strings.ToLower(s)))
-		}
-
-		*title = sb.String()
-
-		b = common.FileExists(filename)
-
-		if b {
+		if common.FileExists(filename) {
 			common.Info("target file %s already exists -> skip!", filename)
 
 			continue
