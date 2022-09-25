@@ -76,7 +76,8 @@ func init() {
 
 func readMetadata() (string, *etree.Document, error) {
 	ba := []byte{}
-	dvdTitle := *title
+
+	var dvdTitle string
 
 	if common.IsWindowsOS() {
 		var err error
@@ -84,18 +85,16 @@ func readMetadata() (string, *etree.Document, error) {
 		cmd := exec.Command("cmd.exe", "/k", "dir "+*input)
 		ba, err = cmd.Output()
 		if common.Error(err) {
-			return dvdTitle, nil, err
+			return "", nil, err
 		}
 
-		if dvdTitle == "" {
-			scanner := bufio.NewScanner(strings.NewReader(string(ba)))
-			if scanner.Scan() {
-				line := scanner.Text()
+		scanner := bufio.NewScanner(strings.NewReader(string(ba)))
+		if scanner.Scan() {
+			line := scanner.Text()
 
-				p := strings.LastIndex(line, " ")
-				if p != -1 {
-					dvdTitle = line[p+1:]
-				}
+			p := strings.LastIndex(line, " ")
+			if p != -1 {
+				dvdTitle = line[p+1:]
 			}
 		}
 
@@ -116,7 +115,7 @@ func readMetadata() (string, *etree.Document, error) {
 
 		ba, err = cmd.Output()
 		if common.Error(err) {
-			return dvdTitle, nil, err
+			return "", nil, err
 		}
 	}
 
@@ -138,21 +137,21 @@ func readMetadata() (string, *etree.Document, error) {
 
 	err := doc.ReadFromBytes([]byte(cleanedXml))
 	if common.Error(err) {
-		return dvdTitle, nil, err
+		return "", nil, err
 	}
 
 	rootElem := doc.SelectElement("lsdvd")
 	if rootElem == nil {
-		return dvdTitle, nil, fmt.Errorf("cannot find root element 'lsdvd'")
+		return "", nil, fmt.Errorf("cannot find root element 'lsdvd'")
 	}
 
 	if dvdTitle == "" {
 		titleElem := rootElem.FindElement("//lsdvd/title")
 		if titleElem == nil {
-			return dvdTitle, nil, fmt.Errorf("cannot find title element")
+			return "", nil, fmt.Errorf("cannot find title element")
 		}
 		if titleElem.Text() == "unknown" {
-			return dvdTitle, nil, fmt.Errorf("found DVD title is 'unknown', please provide title")
+			return "", nil, fmt.Errorf("found DVD title is 'unknown', please provide title")
 		}
 
 		dvdTitle = titleElem.Text()
