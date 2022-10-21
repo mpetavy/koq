@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	github.com/beevik/etree v1.1.0
-	github.com/mpetavy/common v1.4.48
+	github.com/mpetavy/common v1.4.49
 )
 
 require (
