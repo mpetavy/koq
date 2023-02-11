@@ -379,7 +379,5 @@ func run() error {
 }
 
 func main() {
-	defer common.Done()
-
 	common.Run([]string{"i"})
 }
