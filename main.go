@@ -44,7 +44,7 @@ func init() {
 
 	var drive string
 
-	drives := []string{"/dev/dvd", "/dev/sr0", "dev(cdrom"}
+	drives := []string{"/dev/dvd", "/dev/sr0", "dev/cdrom"}
 
 	for _, d := range drives {
 		if common.FileExists(d) {
