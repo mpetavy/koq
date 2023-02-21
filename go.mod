@@ -1,10 +1,10 @@
 module koq
 
-go 1.19
+go 1.20
 
 require (
 	github.com/beevik/etree v1.1.0
-	github.com/mpetavy/common v1.5.50
+	github.com/mpetavy/common v1.5.51
 )
 
 require (
