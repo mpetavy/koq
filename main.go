@@ -29,7 +29,7 @@ var (
 	output       *string
 	startTime    *string
 	stopTime     *string
-	title        *string
+	title        common.MultiValueFlag
 )
 
 const (
@@ -68,7 +68,7 @@ func init() {
 		o = ud
 	}
 	output = flag.String("o", o, "Output directory")
-	title = flag.String("t", "", "Title to use")
+	flag.Var(&title, "t", "Input files to read")
 
 	common.Events.AddListener(common.EventFlagsParsed{}, func(event common.Event) {
 		if len(input) == 0 && dvd != "" {
@@ -402,10 +402,15 @@ func run() error {
 		}
 
 	} else {
-		for _, file := range input {
-			file = common.CleanPath(file)
+		for i := 0; i < len(input); i++ {
+			file := common.CleanPath(input[i])
 
-			err := process(file, *title)
+			t := ""
+			if i < len(title) {
+				t = title[i]
+			}
+
+			err := process(file, t)
 			if common.Error(err) {
 				return err
 			}
