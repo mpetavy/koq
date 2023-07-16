@@ -17,10 +17,11 @@ import (
 // windows: koq -h "c:\Program Files\HandBrake\HandBrakeCLI.exe" -o "z:\Media\Videos\King of Queens" -d g:
 
 var (
+	dvd          string
 	minLength    *time.Duration
 	preset       *string
 	handbrake    *string
-	input        *string
+	input        common.MultiValueFlag
 	format       *string
 	videoEncoder *string
 	audioEncoder *string
@@ -42,20 +43,17 @@ func init() {
 	preset = flag.String("p", "Fast 1080p30", "device to read the DVD content")
 	handbrake = flag.String("b", "HandBrakeCLI", "path to Handbrake CLI executable")
 
-	var drive string
-
-	drives := []string{"/dev/dvd", "/dev/sr0", "dev/cdrom"}
-
-	for _, d := range drives {
+	for _, d := range []string{"/dev/dvd", "/dev/sr0", "dev/cdrom"} {
 		if common.FileExists(d) {
-			drive = d
+			dvd = d
 			break
 		}
 	}
-	input = flag.String("i", drive, "Input device to read the DVD content")
-	format = flag.String("f", "av_mp4", "Handbrake video format")
+
+	flag.Var(&input, "i", "Input files to read")
+	format = flag.String("x", "av_mp4", "Handbrake video format")
 	videoEncoder = flag.String("v", "nvenc_h264", "Handbrake video encoder")
-	audioEncoder = flag.String("a", "copy:ac3", "Handbrake audio encoder")
+	audioEncoder = flag.String("a", "copy", "Handbrake audio encoder")
 	language = flag.String("l", "ger,eng", "Handbrake language")
 	startTime = flag.String("start", "", "Handbrake start-at duration in secs")
 	stopTime = flag.String("stop", "", "Handbrake stop-at duration in secs")
@@ -70,11 +68,16 @@ func init() {
 		o = ud
 	}
 	output = flag.String("o", o, "Output directory")
-
 	title = flag.String("t", "", "Title to use")
+
+	common.Events.AddListener(common.EventFlagsParsed{}, func(event common.Event) {
+		if len(input) == 0 && dvd != "" {
+			input = []string{dvd}
+		}
+	})
 }
 
-func readMetadata() (string, *etree.Document, error) {
+func readMetadata(file string) (string, *etree.Document, error) {
 	ba := []byte{}
 
 	var dvdTitle string
@@ -82,7 +85,7 @@ func readMetadata() (string, *etree.Document, error) {
 	if common.IsWindowsOS() {
 		var err error
 
-		cmd := exec.Command("cmd.exe", "/k", "dir "+*input)
+		cmd := exec.Command("cmd.exe", "/k", "dir "+file)
 		ba, err = cmd.Output()
 		if common.Error(err) {
 			return "", nil, err
@@ -109,7 +112,7 @@ func readMetadata() (string, *etree.Document, error) {
 	} else {
 		var err error
 
-		cmd := exec.Command("lsdvd", "-Ox", "-a", "-v", *input)
+		cmd := exec.Command("lsdvd", "-Ox", "-a", "-v", file)
 
 		common.Info("Execute: %s", common.CmdToString(cmd))
 
@@ -174,7 +177,7 @@ func readMetadata() (string, *etree.Document, error) {
 	return dvdTitle, doc, nil
 }
 
-func eject() error {
+func eject(file string) error {
 	if common.IsWindowsOS() {
 		f, err := common.CreateTempFile()
 		if common.Error(err) {
@@ -192,13 +195,13 @@ func eject() error {
 			common.DebugError(common.FileDelete(filename))
 		}()
 
-		cmd := exec.Command("cscript", filename, *input)
+		cmd := exec.Command("cscript", filename, file)
 		err = cmd.Run()
 		if common.Error(err) {
 			return err
 		}
 	} else {
-		cmd := exec.Command("eject", *input)
+		cmd := exec.Command("eject", file)
 		err := cmd.Run()
 		if common.Error(err) {
 			return err
@@ -208,14 +211,15 @@ func eject() error {
 	return nil
 }
 
-func encode(title string, filename string) error {
+func encode(source string, title string, dest string) error {
+	common.Info("Encode: %s -> %s", source, dest)
+
 	common.Info("Start: %v", time.Now().Format(common.DateTimeMask))
 
 	args := []string{
-		"--title", title,
 		"--preset", *preset,
-		"--input", *input,
-		"--output", filename,
+		"--input", source,
+		"--output", dest,
 		"--format", *format,
 		"--optimize",
 		"--keep-display-aspect",
@@ -229,6 +233,10 @@ func encode(title string, filename string) error {
 		"--subtitle-forced",
 		"--subtitle-burned",
 		"--native-language=" + *language,
+	}
+
+	if title != "" {
+		args = append(args, "--title", title)
 	}
 
 	if *startTime != "" {
@@ -257,7 +265,7 @@ func encode(title string, filename string) error {
 	return err
 }
 
-func run() error {
+func process(source string, title string) error {
 	b := common.FileExists(*output)
 	if !b {
 		return &common.ErrFileNotFound{
@@ -269,23 +277,29 @@ func run() error {
 		return fmt.Errorf("%s is not a directory", *output)
 	}
 
-	stat, err := os.Stat(*input)
+	stat, err := os.Stat(source)
 	if common.Error(err) {
 		return err
 	}
 
 	if stat.Mode().IsRegular() {
-		name := filepath.Base(*input)
-		if strings.Index(name, ".") != -1 {
-			name = name[0:strings.Index(name, ".")]
+		if title == "" {
+			return fmt.Errorf("Undefined flag for title")
 		}
 
-		name = name + ".mp4"
+		dest := filepath.Join(*output, title+".mp4")
 
-		return encode(common.Capitalize(name), filepath.Join(*output, strings.ToLower(name)))
+		if common.FileExists(dest) {
+			err := common.FileBackup(dest)
+			if common.Error(err) {
+				return err
+			}
+		}
+
+		return encode(source, "", dest)
 	}
 
-	dvdTitle, doc, err := readMetadata()
+	dvdTitle, doc, err := readMetadata(source)
 	if common.Error(err) {
 		return err
 	}
@@ -293,14 +307,14 @@ func run() error {
 	common.Info("")
 	common.Info("Metadata title: %s", dvdTitle)
 
-	if *title == "" {
-		*title = dvdTitle
+	if title == "" {
+		title = dvdTitle
 	}
 
-	*title = strings.ReplaceAll(*title, "_", " ")
+	title = strings.ReplaceAll(title, "_", " ")
 
 	common.Info("")
-	common.Info("Used Title: %s", *title)
+	common.Info("Used Title: %s", title)
 
 	rootElem := doc.SelectElement("lsdvd")
 	allStart := time.Now()
@@ -348,7 +362,7 @@ func run() error {
 
 		index++
 
-		filename := common.CleanPath(filepath.Join(*output, *title, *title+" - "+fmt.Sprintf("%02d", index)+"."+ext))
+		filename := common.CleanPath(filepath.Join(*output, title, title+" - "+fmt.Sprintf("%02d", index)+"."+ext))
 
 		if common.FileExists(filename) {
 			common.Info("target file %s already exists -> skip!", filename)
@@ -361,7 +375,7 @@ func run() error {
 			return err
 		}
 
-		err = encode(indexElem.Text(), filename)
+		err = encode(source, indexElem.Text(), filename)
 		if common.Error(err) {
 			return err
 		}
@@ -370,9 +384,32 @@ func run() error {
 	common.Info("")
 	common.Info("Total time needed: %v\n\n", time.Since(allStart))
 
-	err = eject()
+	err = eject(source)
 	if common.Error(err) {
 		return err
+	}
+
+	return nil
+}
+
+func run() error {
+	if len(input) == 1 && input[0] == dvd {
+		file := common.CleanPath(input[0])
+
+		err := process(file, "")
+		if common.Error(err) {
+			return err
+		}
+
+	} else {
+		for _, file := range input {
+			file = common.CleanPath(file)
+
+			err := process(file, *title)
+			if common.Error(err) {
+				return err
+			}
+		}
 	}
 
 	return nil
