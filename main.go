@@ -62,7 +62,7 @@ func init() {
 	ud = fmt.Sprintf("%s/Videos", ud)
 
 	var o string
-	if common.IsWindowsOS() || ud == "" || !common.FileExists(ud) {
+	if common.IsWindows() || ud == "" || !common.FileExists(ud) {
 		o = "."
 	} else {
 		o = ud
@@ -82,7 +82,7 @@ func readMetadata(file string) (string, *etree.Document, error) {
 
 	var dvdTitle string
 
-	if common.IsWindowsOS() {
+	if common.IsWindows() {
 		var err error
 
 		cmd := exec.Command("cmd.exe", "/k", "dir "+file)
@@ -178,7 +178,7 @@ func readMetadata(file string) (string, *etree.Document, error) {
 }
 
 func eject(file string) error {
-	if common.IsWindowsOS() {
+	if common.IsWindows() {
 		f, err := common.CreateTempFile()
 		if common.Error(err) {
 			return err
