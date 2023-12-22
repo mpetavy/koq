@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"embed"
 	"flag"
 	"fmt"
 	"github.com/beevik/etree"
@@ -36,8 +37,11 @@ const (
 	windowsEjectScript = "Set oWMP = CreateObject(\"WMPlayer.OCX.7\" )\nSet colCDROMs = oWMP.cdromCollection\n\nif colCDROMs.Count >= 1 then\n        For i = 0 to colCDROMs.Count - 1\n\t\t\t\tif lcase(colCDROMs.Item(i).driveSpecifier) = lcase(wscript.Arguments.Item(0)) then\n\t\t\t\t\tcolCDROMs.Item(i).Eject\n\t\t\t\tend if\n        Next\nEnd If\n"
 )
 
+//go:embed go.mod
+var resources embed.FS
+
 func init() {
-	common.Init("koq", "", "", "", "2021", "Rescues my KoQ discs (and others...)", "mpetavy", fmt.Sprintf("https://github.com/mpetavy/%s", common.Title()), common.APACHE, nil, nil, nil, run, 0)
+	common.Init("", "", "", "", "Rescues my KoQ discs (and others...)", "", "", "", &resources, nil, nil, run, 0)
 
 	minLength = flag.Duration("min", time.Minute*10, "minimum duration to consider as valid track")
 	preset = flag.String("p", "Fast 1080p30", "device to read the DVD content")
