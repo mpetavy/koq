@@ -56,8 +56,8 @@ func init() {
 
 	flag.Var(&input, "i", "Input files to read")
 	format = flag.String("x", "av_mp4", "Handbrake video format")
-	videoEncoder = flag.String("v", "nvenc_h264", "Handbrake video encoder")
-	audioEncoder = flag.String("a", "copy", "Handbrake audio encoder")
+	videoEncoder = flag.String("video", "nvenc_h264", "Handbrake video encoder")
+	audioEncoder = flag.String("audio", "copy", "Handbrake audio encoder")
 	language = flag.String("l", "ger,eng", "Handbrake language")
 	startTime = flag.String("start", "", "Handbrake start-at duration in secs")
 	stopTime = flag.String("stop", "", "Handbrake stop-at duration in secs")
