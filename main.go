@@ -74,7 +74,7 @@ func init() {
 	output = flag.String("o", o, "Output directory")
 	flag.Var(&title, "t", "Input files to read")
 
-	common.Events.AddListener(common.EventFlagsParsed{}, func(event common.Event) {
+	common.Events.AddListener(common.EventFlags{}, func(event common.Event) {
 		if len(input) == 0 && dvd != "" {
 			input = []string{dvd}
 		}
