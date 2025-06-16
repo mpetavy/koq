@@ -6,7 +6,7 @@ toolchain go1.23.6
 
 require (
 	github.com/beevik/etree v1.1.4
-	github.com/mpetavy/common v1.10.32
+	github.com/mpetavy/common v1.10.33
 )
 
 require (
